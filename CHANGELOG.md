@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### ⚠ BREAKING CHANGES
+
+* Remove `OpenFeatureProviderEvents.ProviderNotReady`. The OpenFeature specification defines provider events as `PROVIDER_READY`, `PROVIDER_ERROR`, `PROVIDER_CONFIGURATION_CHANGED`, and `PROVIDER_STALE` only; use `ProviderError` and `ProviderReady` for disconnect/recovery, and rely on `OpenFeatureStatus.NotReady` from `statusFlow` for SDK lifecycle (for example before initialization). `OpenFeatureError.ProviderNotReadyError` and `ErrorCode.PROVIDER_NOT_READY` are unchanged for client evaluation short-circuiting.
+* Remove the deprecated `error` parameter from `OpenFeatureProviderEvents.ProviderError`; use `eventDetails` with `message` and `errorCode` instead. `OpenFeatureError.fromMessageAndErrorCode` now passes the given message through for `ErrorCode.PROVIDER_NOT_READY`.
+
 ## [0.7.2](https://github.com/open-feature/kotlin-sdk/compare/v0.7.1...v0.7.2) (2026-03-10)
 
 
