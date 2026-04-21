@@ -11,11 +11,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.filterIsInstance
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -29,20 +27,14 @@ object OpenFeatureAPI {
     private val NOOP_PROVIDER = NoOpProvider()
     private var provider: StateManagingProvider = NOOP_PROVIDER
     private var context: EvaluationContext? = null
-    val providersFlow: MutableStateFlow<FeatureProvider> = MutableStateFlow(NOOP_PROVIDER)
+    private val _providersFlow: MutableStateFlow<StateManagingProvider> = MutableStateFlow(NOOP_PROVIDER)
 
     /**
      * Get the current [OpenFeatureStatus] for the SDK.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
     val statusFlow: Flow<OpenFeatureStatus>
-        get() = providersFlow.flatMapLatest { p ->
-            val smp = p as StateManagingProvider
-            flow<OpenFeatureStatus> {
-                emit(smp.status.value)
-                emitAll(smp.status)
-            }.distinctUntilChanged()
-        }.distinctUntilChanged()
+        get() = _providersFlow.flatMapLatest { it.status }.distinctUntilChanged()
 
     var hooks: List<Hook<*>> = listOf()
         private set
@@ -104,7 +96,7 @@ object OpenFeatureAPI {
         val oldProvider = providerMutex.withLock {
             val current = provider
             provider = normalizedProvider
-            providersFlow.value = normalizedProvider
+            _providersFlow.value = normalizedProvider
             if (initialContext != null) context = initialContext
             current
         }
@@ -112,10 +104,16 @@ object OpenFeatureAPI {
         try {
             oldProvider.shutdown()
             normalizedProvider.initialize(context)
-            normalizedProvider.status.first { it !is OpenFeatureStatus.NotReady }
+            normalizedProvider.status.first { it !is OpenFeatureStatus.NotReady && it !is OpenFeatureStatus.Reconciling }
         } catch (e: CancellationException) {
-            // Cancelled by design (new provider set or shutdown) - not an error
-        }
+            // This happens by design and shouldn't be treated as an error
+        } catch (e: Throwable) {
+            OpenFeatureStatus.Error(
+                OpenFeatureError.GeneralError(
+                    e.message ?: "Unknown error"
+                )
+            )
+
     }
 
     /**
@@ -135,7 +133,7 @@ object OpenFeatureAPI {
         val oldProvider = providerMutex.withLock {
             val current = provider
             provider = NOOP_PROVIDER
-            providersFlow.value = NOOP_PROVIDER
+            _providersFlow.value = NOOP_PROVIDER
             current
         }
 
@@ -188,7 +186,13 @@ object OpenFeatureAPI {
             try {
                 provider.onContextSet(oldContext, evaluationContext)
             } catch (e: CancellationException) {
-                // Cancelled by design (new context set or shutdown) - not an error
+                // This happens by design and shouldn't be treated as an error
+            } catch (e: Throwable) {
+                OpenFeatureStatus.Error(
+                    OpenFeatureError.GeneralError(
+                        e.message ?: "Unknown error"
+                    )
+                )
             }
         }
     }
@@ -252,6 +256,6 @@ object OpenFeatureAPI {
      * Observe events from currently configured Provider.
      */
     @OptIn(ExperimentalCoroutinesApi::class)
-    inline fun <reified T : OpenFeatureProviderEvents> observe(): Flow<T> = providersFlow
+    inline fun <reified T : OpenFeatureProviderEvents> observe(): Flow<T> = _providersFlow
         .flatMapLatest { it.observe() }.filterIsInstance<T>()
 }

@@ -37,7 +37,7 @@ interface StateManagingProvider : FeatureProvider {
      * Called when the client lifecycle ends; release resources and threads.
      *
      * Before returning: set [status] to [OpenFeatureStatus.NotReady], then emit
-     * [OpenFeatureProviderEvents.ProviderNotReady] on [observe].
+     * [OpenFeatureProviderEvents.ProviderError] on [observe].
      */
     override fun shutdown()
 
