@@ -59,6 +59,14 @@ open class NoOpProvider(override val hooks: List<Hook<*>> = listOf()) : StateMan
         return ProviderEvaluation(defaultValue, "Passed in default", Reason.DEFAULT.toString())
     }
 
+    override fun getLongEvaluation(
+        key: String,
+        defaultValue: Long,
+        context: EvaluationContext?
+    ): ProviderEvaluation<Long> {
+        return ProviderEvaluation(defaultValue, "Passed in default", Reason.DEFAULT.toString())
+    }
+
     override fun getDoubleEvaluation(
         key: String,
         defaultValue: Double,
