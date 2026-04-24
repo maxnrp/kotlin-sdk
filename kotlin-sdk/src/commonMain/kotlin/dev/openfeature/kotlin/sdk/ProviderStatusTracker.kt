@@ -17,21 +17,17 @@ import kotlinx.coroutines.flow.asStateFlow
  * set readiness from another [StateFlow] outside [send]. For [StateManagingProvider], expose
  * [status] and [observe] from the tracker, or use [OpenFeatureAPI.statusFlow] for readiness if registered.
  *
- * [observe] is a [MutableSharedFlow] with `replay = 1`. New subscribers get the most recent [send] (if
- * any), then all later [send] calls. The event flow does not conflate by [equals] (unlike [status]);
- * for readiness, prefer [status] or `OpenFeatureAPI.statusFlow` when the replay is not a lifecycle
- * event (e.g. `ProviderConfigurationChanged` was last on the bus).
+ * [observe] uses a [MutableSharedFlow] with `replay = 1`. New subscribers replay the
+ * most recent [send] (if any), then all later [send] calls. Use [status] for a readiness snapshot when
+ * the replay is not a lifecycle-style event. The event flow does not conflate by [equals] (unlike [status]).
  *
- * [send] uses [MutableSharedFlow.tryEmit], which is non-suspending and can return `false` if the
- * internal buffer (including `extraBufferCapacity`) is full and collectors are not keeping up—rare
- * for typical provider lifecycle rates. Rely on [status] for authoritative readiness if you are
- * unsure. [send] and [synchronized] (atomicfu) keep [OpenFeatureStatus] and emissions ordered; do not
+ * [send] is synchronized (atomicfu) to keep [OpenFeatureStatus] updates and emissions ordered; do not
  * call [send] re-entrantly from [observe] collection.
  */
 class ProviderStatusTracker {
     private val providerMutex = SynchronizedObject()
     private val _status = MutableStateFlow<OpenFeatureStatus>(OpenFeatureStatus.NotReady)
-    private val _events = MutableSharedFlow<OpenFeatureProviderEvents>(replay = 1, extraBufferCapacity = 256)
+    private val _events = MutableSharedFlow<OpenFeatureProviderEvents>(replay = 1, extraBufferCapacity = 5)
 
     val status: StateFlow<OpenFeatureStatus> = _status.asStateFlow()
 
